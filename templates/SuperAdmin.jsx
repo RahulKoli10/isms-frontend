@@ -3,10 +3,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { API_BASE_URL } from "./config";
 import logo from "../static/NNlogo.jpeg";
-
-// ────────────────────────────────────────────────
-//           DATE / TIME FORMATTING HELPERS
-// ────────────────────────────────────────────────
+ 
+//           DATE / TIME FORMATTING HELPERS 
 
 function formatIndianDateTime(value) {
   if (!value || value === 'NULL' || value.trim() === '') return "—";
@@ -203,19 +201,33 @@ const SuperAdmin = () => {
 
   const fetchDashboardData = () => {
     Promise.all([
-      fetch(`${API_BASE_URL}/api/admins`, { credentials: "include" }).then((res) => res.json()),
-      fetch(`${API_BASE_URL}/api/users`, { credentials: "include" }).then((res) => res.json()),
-      fetch(`${API_BASE_URL}/api/logs`, { credentials: "include" }).then((res) => res.json()),
+      fetch(`${API_BASE_URL}/api/admins`, { credentials: "include" }).then((res) => {
+        if (!res.ok) return [];
+        return res.json();
+      }),
+      fetch(`${API_BASE_URL}/api/users`, { credentials: "include" }).then((res) => {
+        if (!res.ok) return [];
+        return res.json();
+      }),
+      fetch(`${API_BASE_URL}/api/logs`, { credentials: "include" }).then((res) => {
+        if (!res.ok) return [];
+        return res.json();
+      }),
     ])
       .then(([adminsData, usersData, logsDataResponse]) => {
+        // Ensure data is always an array
+        const adminsArray = Array.isArray(adminsData) ? adminsData : [];
+        const usersArray = Array.isArray(usersData) ? usersData : [];
+        const logsArray = Array.isArray(logsDataResponse) ? logsDataResponse : [];
+        
         const storedUser = JSON.parse(localStorage.getItem('currentUser'));
         const adminDomain = currentUser.domain || storedUser?.domain;
         const adminRole = currentUser.role || storedUser?.role;
         const isAdminName = currentUser.username || currentUser.name || storedUser?.username;
         const isSpecialDomain = !adminDomain || adminDomain === 'xyz' || adminDomain === 'Admin' || adminDomain === 'Super Admin' || adminDomain === 'Management' || (adminRole && adminRole.toLowerCase().includes('super'));
-        const filteredAdmins = isSpecialDomain ? adminsData : adminsData.filter(a => (a.domain || a.Domain) === adminDomain);
-        const filteredUsers = isSpecialDomain ? usersData : usersData.filter(u => (u.domain || u.Domain) === adminDomain);
-        const filteredLogs = isSpecialDomain ? (logsDataResponse || []) : (logsDataResponse || []).filter(l => l.domain === adminDomain);
+        const filteredAdmins = isSpecialDomain ? adminsArray : adminsArray.filter(a => (a.domain || a.Domain) === adminDomain);
+        const filteredUsers = isSpecialDomain ? usersArray : usersArray.filter(u => (u.domain || u.Domain) === adminDomain);
+        const filteredLogs = isSpecialDomain ? logsArray : logsArray.filter(l => l.domain === adminDomain);
 
         setMonthlyReportData(filteredUsers);
         setLogsData(filteredLogs);
