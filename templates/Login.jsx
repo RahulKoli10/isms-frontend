@@ -55,6 +55,22 @@ const Login = () => {
         })
       );
 
+      // Verify session was created by making a test request
+      try {
+        const sessionCheck = await fetch(getApiUrl("/api/session"), {
+          method: "GET",
+          credentials: "include",
+        });
+        
+        if (sessionCheck.ok) {
+          console.log("✅ Session verified successfully");
+        } else {
+          console.warn("⚠️ Session may not be properly established");
+        }
+      } catch (sessionErr) {
+        console.warn("⚠️ Session verification failed:", sessionErr);
+      }
+
       // Navigate
       navigateBasedOnRole(user.role);
 

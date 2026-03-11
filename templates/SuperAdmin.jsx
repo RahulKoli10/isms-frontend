@@ -95,6 +95,25 @@ function fetchWithSession(url, options = {}) {
   });
 }
 
+// Session verification on app mount
+const verifySession = async () => {
+  try {
+    const response = await fetchWithSession(`${API_BASE_URL}/api/session`);
+    if (!response.ok) {
+      // Session not valid, redirect to login
+      console.warn("Session invalid, redirecting to login...");
+      localStorage.removeItem("currentUser");
+      localStorage.removeItem("token");
+      window.location.href = "/";
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("Session verification failed:", err);
+    return false;
+  }
+};
+
 const SuperAdmin = () => {
   const location = useLocation();
   const [activeView, setActiveView] = useState("dashboard");
@@ -286,6 +305,9 @@ const SuperAdmin = () => {
     let view = "dashboard";
 
     if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+
+    // Verify session on mount
+    verifySession();
 
     if (path.endsWith("/create-admin")) view = "create-admin";
     else if (path.endsWith("/view-admins")) view = "view-admins";
