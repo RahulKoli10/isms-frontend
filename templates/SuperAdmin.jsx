@@ -1566,8 +1566,7 @@ const AdminList = ({ onCreateNew, onEdit, currentUser }) => {
 
   useEffect(() => {
     fetchAdmins();
-    const interval = setInterval(fetchAdmins, 3000);
-    return () => clearInterval(interval);
+    // Removed redundant setInterval polling - main dashboard already handles data refresh
   }, []);
 
   const fetchAdmins = () => {
@@ -1685,8 +1684,7 @@ const UserList = ({ onCreateNew, onEdit, currentUser }) => {
 
   useEffect(() => {
     fetchUsers();
-    const interval = setInterval(fetchUsers, 3000);
-    return () => clearInterval(interval);
+    // Removed redundant setInterval polling - main dashboard already handles data refresh
   }, []);
 
   const fetchUsers = () => {
