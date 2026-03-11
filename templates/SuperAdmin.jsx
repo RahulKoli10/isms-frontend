@@ -123,6 +123,7 @@ const SuperAdmin = () => {
     const response = await fetch(`${API_BASE_URL}/api/logout`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({
         username: currentUser.username
       }),
@@ -161,7 +162,7 @@ const SuperAdmin = () => {
     try {
       if (!currentUser?.username) return;
 
-      const response = await fetch(`${API_BASE_URL}/api/logs`);
+      const response = await fetch(`${API_BASE_URL}/api/logs`, { credentials: "include" });
       if (response.ok) {
         const allLogs = await response.json() || [];
         
@@ -202,9 +203,9 @@ const SuperAdmin = () => {
 
   const fetchDashboardData = () => {
     Promise.all([
-      fetch(`${API_BASE_URL}/api/admins`).then((res) => res.json()),
-      fetch(`${API_BASE_URL}/api/users`).then((res) => res.json()),
-      fetch(`${API_BASE_URL}/api/logs`).then((res) => res.json()),
+      fetch(`${API_BASE_URL}/api/admins`, { credentials: "include" }).then((res) => res.json()),
+      fetch(`${API_BASE_URL}/api/users`, { credentials: "include" }).then((res) => res.json()),
+      fetch(`${API_BASE_URL}/api/logs`, { credentials: "include" }).then((res) => res.json()),
     ])
       .then(([adminsData, usersData, logsDataResponse]) => {
         const storedUser = JSON.parse(localStorage.getItem('currentUser'));
@@ -315,6 +316,7 @@ const SuperAdmin = () => {
           await fetch(`${API_BASE_URL}/api/logout`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            credentials: "include",
             body: JSON.stringify({
               username: currentUser.username
             }),
@@ -343,7 +345,7 @@ const SuperAdmin = () => {
       setReportsError(null);
       // Use separate endpoints for daily and weekly reports
       const endpoint = reportType === "daily" ? "daily-reports" : "weekly-reports";
-      const response = await fetch(`${API_BASE_URL}/api/${endpoint}`);
+      const response = await fetch(`${API_BASE_URL}/api/${endpoint}`, { credentials: "include" });
 
       if (!response.ok) {
         throw new Error(`Failed to fetch ${reportType} reports`);
@@ -406,6 +408,7 @@ const SuperAdmin = () => {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
         body: JSON.stringify(reportData),
       });
 
@@ -470,6 +473,7 @@ const SuperAdmin = () => {
       const endpoint = reportType === "daily" ? "daily-reports" : "weekly-reports";
       const response = await fetch(`${API_BASE_URL}/api/${endpoint}/${reportId}`, {
         method: "DELETE",
+        credentials: "include",
       });
 
       if (!response.ok) {
