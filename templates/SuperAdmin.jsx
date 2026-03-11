@@ -99,18 +99,23 @@ function fetchWithSession(url, options = {}) {
 const verifySession = async () => {
   try {
     const response = await fetchWithSession(`${API_BASE_URL}/api/session`);
-    if (!response.ok) {
+    const data = await response.json();
+    
+    if (!response.ok || !data.authenticated) {
       // Session not valid, redirect to login
-      console.warn("Session invalid, redirecting to login...");
+      console.warn("Session invalid, redirecting to login...", data);
       localStorage.removeItem("currentUser");
       localStorage.removeItem("token");
       window.location.href = "/";
       return false;
     }
+    console.log("✅ Session verified:", data.user);
     return true;
   } catch (err) {
     console.error("Session verification failed:", err);
-    return false;
+    // Don't redirect on network error - allow access
+    // The actual API calls will handle auth errors
+    return true;
   }
 };
 
