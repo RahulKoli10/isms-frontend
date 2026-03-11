@@ -61,7 +61,8 @@ const Login = () => {
     const navigateBasedOnRole = (roleType) => {
         const role = roleType?.toLowerCase();
         if (role === 'superadmin') {
-            navigate('/super-admin', { replace: true });
+            // Unify SuperAdmin routes to /superadmin
+            navigate('/superadmin', { replace: true });
         } else if (role === 'admin') {
             navigate('/admin', { replace: true });
         } else if (role === 'mentor') {

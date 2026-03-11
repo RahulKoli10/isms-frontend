@@ -143,7 +143,7 @@ const SuperAdmin = () => {
 };
 
   const handleSetActiveView = (view) => {
-    navigate(`/super-admin/${view === 'dashboard' ? '' : view}`);
+    navigate(`/superadmin/${view === 'dashboard' ? '' : view}`);
   };
 
   const [dashboardStats, setDashboardStats] = useState({
@@ -452,9 +452,9 @@ const SuperAdmin = () => {
 
       setShowReportForm(null);
       if (showReportForm === "daily") {
-        navigate("/super-admin/daily-reports?mode=list");
+        navigate("/superadmin/daily-reports?mode=list");
       } else if (showReportForm === "weekly") {
-        navigate("/super-admin/weekly-reports?mode=list");
+        navigate("/superadmin/weekly-reports?mode=list");
       }
       alert("Report created successfully!");
     } catch (error) {
@@ -956,13 +956,13 @@ const SuperAdmin = () => {
                 <FolderCard
                   title="Daily Reports"
                   icon={<FileTextIcon size={24} className="text-yellow-600" />}
-                  onClick={() => navigate("/super-admin/daily-reports?mode=list")}
+                  onClick={() => navigate("/superadmin/daily-reports?mode=list")}
                 />
                 <FolderCard
                   title="Weekly Reports"
                   icon={<FileTextIcon size={24} className="text-blue-600" />}
                   color="blue"
-                  onClick={() => navigate("/super-admin/weekly-reports?mode=list")}
+                  onClick={() => navigate("/superadmin/weekly-reports?mode=list")}
                 />
 
               </div>
@@ -1005,8 +1005,8 @@ const SuperAdmin = () => {
               loading={reportsLoading}
               error={reportsError}
               showForm={showReportForm === "daily"}
-              onShowForm={() => navigate("/super-admin/daily-reports?mode=form")}
-              onHideForm={() => navigate("/super-admin/daily-reports?mode=list")}
+              onShowForm={() => navigate("/superadmin/daily-reports?mode=form")}
+              onHideForm={() => navigate("/superadmin/daily-reports?mode=list")}
               formData={reportFormData}
               onFormChange={setReportFormData}
               onFormSubmit={handleReportSubmit}
@@ -1023,8 +1023,8 @@ const SuperAdmin = () => {
               loading={reportsLoading}
               error={reportsError}
               showForm={showReportForm === "weekly"}
-              onShowForm={() => navigate("/super-admin/weekly-reports?mode=form")}
-              onHideForm={() => navigate("/super-admin/weekly-reports?mode=list")}
+              onShowForm={() => navigate("/superadmin/weekly-reports?mode=form")}
+              onHideForm={() => navigate("/superadmin/weekly-reports?mode=list")}
               formData={reportFormData}
               onFormChange={setReportFormData}
               onFormSubmit={handleReportSubmit}

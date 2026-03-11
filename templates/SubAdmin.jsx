@@ -314,7 +314,7 @@ const SubAdmin = () => {
 
         // Send notification to Super Admin
         try {
-            await fetch(`${API_BASE_URL}/api/notifications/super-admin`, {
+            await fetch(`${API_BASE_URL}/api/notifications/superadmin`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
