@@ -2,7 +2,7 @@ const configuredApiBaseUrl = import.meta.env?.VITE_API_BASE_URL?.trim();
 const browserHost = typeof window !== "undefined" ? window.location.hostname : "";
 
 const productionFallbacks = {
-  "isms-frontend.onrender.com": "https://isms-backend.onrender.com",
+  "isms-frontend-hsz2.onrender.com": "https://isms-sever.onrender.com",
 };
 
 const inferredApiBaseUrl =
