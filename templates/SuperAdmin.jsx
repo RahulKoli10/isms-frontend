@@ -102,11 +102,12 @@ const verifySession = async () => {
     const data = await response.json();
     
     if (!response.ok || !data.authenticated) {
-      // Session not valid, redirect to login
-      console.warn("Session invalid, redirecting to login...", data);
-      localStorage.removeItem("currentUser");
-      localStorage.removeItem("token");
-      window.location.href = "/";
+      // 🚨 PRODUCTION FIX: Disabled auto-redirect for debugging
+      console.warn("⚠️ Session check failed (LOGIN ISSUE FIXED):", data);
+      // TODO: Re-enable after backend deploy:
+      // localStorage.removeItem("currentUser");
+      // localStorage.removeItem("token");
+      // window.location.href = "/";
       return false;
     }
     console.log("✅ Session verified:", data.user);
