@@ -341,7 +341,7 @@ const Admin = () => {
         } else if (path.endsWith('/domains')) {
             setCurrentView('domains');
             if (usersList.length === 0) {
-                fetch(`${API_BASE_URL}/api/users`)
+                fetch(`${API_BASE_URL}/api/users`, { credentials: "include" })
                     .then(res => res.ok ? res.json() : [])
                     .then(data => setUsersList(data))
                     .catch(err => console.error("Failed to fetch users for domains", err));
