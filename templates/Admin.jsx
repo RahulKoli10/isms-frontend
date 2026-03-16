@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { API_BASE_URL } from './config';
+import { formatIndianDate, formatIndianTime } from './dateTime';
 import logo from '../static/NNlogo.jpeg';
 
 const Admin = () => {
@@ -10,10 +11,15 @@ const Admin = () => {
     const [error, setError] = useState(null);
     const [reportsData, setReportsData] = useState([]);
     const [usersList, setUsersList] = useState([]);
+    const [mentorsList, setMentorsList] = useState([]);
     const [logsData, setLogsData] = useState([]);
     const [mentorPerformance, setMentorPerformance] = useState([]);
+    const [selectedReport, setSelectedReport] = useState(null);
+    const [editingData, setEditingData] = useState(null);
     const [currentView, setCurrentView] = useState('dashboard');
     const pollingIntervalRef = useRef(null);
+    const sessionExpiredRef = useRef(false);
+    const reportsRequestInFlightRef = useRef(false);
     const navigate = useNavigate();
     const location = useLocation();
     const [currentUser, setCurrentUser] = useState(() => {
@@ -31,6 +37,28 @@ const Admin = () => {
         return { name: 'Admin', username: 'Admin', domain: '', role: '', designation: '' };
     });
     const [dashboardStats, setDashboardStats] = useState({ dailyProductivity: '--', weeklyActivity: '--' });
+    const USERS_POLL_MS = 15000;
+    const LOGS_POLL_MS = 15000;
+    const MENTORS_POLL_MS = 30000;
+    const DASHBOARD_POLL_MS = 30000;
+
+    const clearPolling = () => {
+        if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+        }
+    };
+
+    const handleUnauthorized = () => {
+        clearPolling();
+        if (sessionExpiredRef.current) return;
+
+        sessionExpiredRef.current = true;
+        localStorage.removeItem("currentUser");
+        localStorage.removeItem("token");
+        setError("Session expired. Please log in again.");
+        navigate("/");
+    };
 
     const handleLogout = async () => {
         try {
@@ -98,13 +126,15 @@ const Admin = () => {
     };
 
     // Report folder handlers with SuperAdmin data fetching and real-time updates
-    const handleReportFolderClick = async (reportType) => {
-        try {
-            setIsLoading(true);
-            setError(null);
-            const endpoint = reportType.toLowerCase().includes('daily') ? 'daily-reports' : 'weekly-reports';
+    const fetchReports = async (reportType, { showLoader = false } = {}) => {
+        if (reportsRequestInFlightRef.current) return;
 
-            // Fetch reports from SuperAdmin API
+        try {
+            reportsRequestInFlightRef.current = true;
+            if (showLoader) setIsLoading(true);
+            setError(null);
+
+            const endpoint = reportType.toLowerCase().includes('daily') ? 'daily-reports' : 'weekly-reports';
             const response = await fetch(`${API_BASE_URL}/api/${endpoint}`, {
                 method: 'GET',
                 headers: {
@@ -112,6 +142,11 @@ const Admin = () => {
                 },
                 credentials: 'include'
             });
+
+            if (response.status === 401) {
+                handleUnauthorized();
+                return;
+            }
 
             if (!response.ok) {
                 throw new Error(`Failed to fetch ${reportType} reports`);
@@ -121,34 +156,18 @@ const Admin = () => {
             const mentorDomain = currentUser.domain || JSON.parse(localStorage.getItem('currentUser'))?.domain;
             const filteredReports = mentorDomain ? data.filter(r => r.domain === mentorDomain) : data;
             setReportsData(filteredReports);
-
-            // Set up real-time polling - refresh every 3 seconds
-            pollingIntervalRef.current = setInterval(async () => {
-                try {
-                    const refreshResponse = await fetch(`${API_BASE_URL}/api/${endpoint}`, {
-                        method: 'GET',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        credentials: 'include'
-                    });
-
-                    if (refreshResponse.ok) {
-                        const updatedData = await refreshResponse.json();
-                        const filteredRefresh = mentorDomain ? updatedData.filter(r => r.domain === mentorDomain) : updatedData;
-                        setReportsData(filteredRefresh);
-                    }
-                } catch (err) {
-                    console.warn(`Real-time polling error for ${reportType}:`, err);
-                }
-            }, 3000);
-
         } catch (err) {
             console.error(`Error fetching reports:`, err);
             setError(`Failed to load reports: ${err.message}`);
         } finally {
-            setIsLoading(false);
+            reportsRequestInFlightRef.current = false;
+            if (showLoader) setIsLoading(false);
         }
+    };
+
+    const handleReportFolderClick = async (reportType) => {
+        setCurrentView(reportType.toLowerCase().includes('daily') ? 'daily-reports' : 'weekly-reports');
+        await fetchReports(reportType, { showLoader: true });
     };
 
     const fetchMentors = async () => {
@@ -244,14 +263,17 @@ const Admin = () => {
                 fetch(`${API_BASE_URL}/api/admins?role=mentor`, { credentials: "include" })
             ]);
 
-            if (uRes.ok && lRes.ok) {
-                const users = await uRes.json();
-                const allLogs = await lRes.json() || [];
+            const users = uRes.ok ? await uRes.json() : [];
+            const reports = rRes.ok ? await rRes.json() : [];
+            const logs = lRes.ok ? await lRes.json() : [];
+            const performance = mRes.ok ? await mRes.json() : [];
+            const mentorsData = mentorsRes?.ok ? await mentorsRes.json() : [];
 
+            if (uRes.ok && lRes.ok) {
                 // No domain filtering — show all users across all domains
                 const usersWithActivity = users.map(user => {
                     // Find all logs for this specific user, sorted by newest first
-                    const userLogs = allLogs.filter(log => log.username?.trim().toLowerCase() === user.username?.trim().toLowerCase())
+                    const userLogs = logs.filter(log => log.username?.trim().toLowerCase() === user.username?.trim().toLowerCase())
                         .slice().reverse();
 
                     // Find the latest record that has a login time
@@ -276,19 +298,15 @@ const Admin = () => {
                 });
             }
             if (rRes.ok) {
-                const reports = await rRes.json();
                 setReportsData(reports); // All reports, no domain filter
             }
             if (lRes.ok) {
-                const logs = await lRes.json();
                 setLogsData(logs); // All logs, no domain filter
             }
             if (mRes.ok) {
-                const performance = await mRes.json();
                 setMentorPerformance(performance); // All mentor performance, no domain filter
             }
             if (mentorsRes && mentorsRes.ok) {
-                const mentorsData = await mentorsRes.json();
                 setMentorsList(mentorsData);
             }
         } catch (err) {
@@ -327,11 +345,11 @@ const Admin = () => {
     // URL-based view management
     useEffect(() => {
         const path = location.pathname;
-        if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+        clearPolling();
 
         if (path.endsWith('/users')) {
             handleUsersNav();
-            pollingIntervalRef.current = setInterval(fetchUsers, 3000);
+            pollingIntervalRef.current = setInterval(fetchUsers, USERS_POLL_MS);
         } else if (path.endsWith('/create-user')) {
             setCurrentView('create-user');
         } else if (path.endsWith('/daily-reports')) {
@@ -351,18 +369,18 @@ const Admin = () => {
         } else if (path.endsWith('/mentors')) {
             setCurrentView('mentors');
             fetchMentors();
-            pollingIntervalRef.current = setInterval(fetchMentors, 5000);
+            pollingIntervalRef.current = setInterval(fetchMentors, MENTORS_POLL_MS);
         } else if (path.endsWith('/logs')) {
             setCurrentView('logs');
             fetchLogs();
-            pollingIntervalRef.current = setInterval(fetchLogs, 3000);
+            pollingIntervalRef.current = setInterval(fetchLogs, LOGS_POLL_MS);
         } else {
             handleDashboardNav();
-            pollingIntervalRef.current = setInterval(fetchDashboardData, 3000);
+            pollingIntervalRef.current = setInterval(fetchDashboardData, DASHBOARD_POLL_MS);
         }
 
         return () => {
-            if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+            clearPolling();
         };
     }, [location.pathname]);
 
@@ -378,48 +396,6 @@ const Admin = () => {
             }));
         }
     }, []);
-
-    // Handle window close/tab close
-    useEffect(() => {
-        const handleBeforeUnload = async (e) => {
-          if (currentUser?.username) {
-            // Get current time
-            const now = new Date();
-            const formattedTime = now.toLocaleString("en-US", {
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-              month: "short",
-              day: "numeric",
-              year: "numeric"
-            });
-
-            // Call logout API
-            try {
-              await fetch(`${API_BASE_URL}/api/logout`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
-                body: JSON.stringify({
-                  username: currentUser.username
-                }),
-                keepalive: true
-              });
-
-              // Show logout modal with time
-              setLogoutTime(formattedTime);
-              setShowLogoutModal(true);
-            } catch (error) {
-              console.error("Logout failed on window close:", error);
-            }
-          }
-        };
-
-        window.addEventListener('beforeunload', handleBeforeUnload);
-        return () => {
-          window.removeEventListener('beforeunload', handleBeforeUnload);
-        };
-    }, [currentUser]);
 
     return (
         <div className="flex h-screen bg-[#F8F9FA] font-sans text-slate-800">
@@ -1188,9 +1164,9 @@ const LogStartRow = ({ id, timestamp, login_time, logout_time, username, designa
     const loginTimeValue = login_time || (!isLogout ? timestamp : null);
     const logoutTimeValue = logout_time || (isLogout ? timestamp : null);
 
-    const displayLoginTime = loginTimeValue ? new Date(loginTimeValue).toLocaleTimeString() : null;
-    const displayLogoutTime = logoutTimeValue ? new Date(logoutTimeValue).toLocaleTimeString() : null;
-    const displayDate = (loginTimeValue || logoutTimeValue) ? new Date(loginTimeValue || logoutTimeValue).toLocaleDateString('en-GB') : 'N/A';
+    const displayLoginTime = formatIndianTime(loginTimeValue);
+    const displayLogoutTime = formatIndianTime(logoutTimeValue);
+    const displayDate = formatIndianDate(loginTimeValue || logoutTimeValue);
 
     return (
       <tr className="bg-white hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0 group">
@@ -1361,7 +1337,11 @@ const CreateUserForm = ({ onViewList, initialData }) => {
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify(formData),
+                credentials: "include",
+                body: JSON.stringify({
+                    ...formData,
+                    Domain: formData.domain,
+                }),
             });
 
             if (response.ok) {

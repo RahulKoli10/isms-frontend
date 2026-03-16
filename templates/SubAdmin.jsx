@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { API_BASE_URL } from './config';
+import { formatIndianDate, formatIndianDateTime, formatIndianTime } from './dateTime';
 
 const SubAdmin = () => {
     const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -701,8 +702,8 @@ const SubAdmin = () => {
                                                 return (
                                                     <ActivityRow
                                                         key={log.id}
-                                                        date={log.login_time ? new Date(log.login_time).toLocaleDateString('en-GB') : 'N/A'}
-                                                        time={log.login_time ? new Date(log.login_time).toLocaleTimeString() : 'N/A'}
+                                                        date={formatIndianDate(log.login_time)}
+                                                        time={formatIndianTime(log.login_time) || 'N/A'}
                                                         activity={`${log.username}: ${log.action}`}
                                                         status={status}
                                                     />
@@ -1172,27 +1173,14 @@ const SidebarItem = ({ icon, label, active, onClick, hasSubmenu, isOpen, childre
 };
 
 const UserRow = ({ id, name, email, domain, loginTime, logoutTime, status }) => {
-    const formatDateTime = (dateTimeString) => {
-        if (!dateTimeString) return 'N/A';
-        const date = new Date(dateTimeString);
-        return date.toLocaleString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-        });
-    };
-
     return (
         <tr className="hover:bg-slate-50 transition-colors">
             <td className="px-6 py-4 font-mono text-xs text-slate-500">{id}</td>
             <td className="px-6 py-4 font-semibold text-slate-700 whitespace-nowrap">{name}</td>
             <td className="px-6 py-4 text-slate-500">{email}</td>
             <td className="px-6 py-4 text-slate-500">{domain}</td>
-            <td className="px-6 py-4 text-slate-500 text-xs">{loginTime ? formatDateTime(loginTime) : 'N/A'}</td>
-            <td className="px-6 py-4 text-slate-500 text-xs">{logoutTime ? formatDateTime(logoutTime) : 'N/A'}</td>
+            <td className="px-6 py-4 text-slate-500 text-xs">{loginTime ? formatIndianDateTime(loginTime) : 'N/A'}</td>
+            <td className="px-6 py-4 text-slate-500 text-xs">{logoutTime ? formatIndianDateTime(logoutTime) : 'N/A'}</td>
             <td className="px-6 py-4 text-center">
                 <span className={`inline-block w-3 h-3 rounded-full ${status === 'online' ? 'bg-green-500 shadow-sm shadow-green-300' : 'bg-slate-300'}`}></span>
             </td>
