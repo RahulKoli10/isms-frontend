@@ -2,8 +2,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { API_BASE_URL } from './config';
-import { formatIndianDate, formatIndianTime } from './dateTime';
+import { formatIndianDate, formatIndianTime, getLatestLoginTime, getLatestLogoutTime } from './dateTime';
 import logo from '../static/NNlogo.jpeg';
+
+const isEndUserRole = (role) => String(role || '').trim().toLowerCase() === 'user';
 
 const Admin = () => {
     const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -202,24 +204,16 @@ const Admin = () => {
 
             if (uRes.ok && lRes.ok) {
                 const data = await uRes.json();
-                const allLogs = await lRes.json() || [];
+                const allLogs = (await lRes.json() || []).filter(log => isEndUserRole(log.role));
 
                 // No domain filtering — show all users
                 const usersWithActivity = data.map(user => {
-                    // Find all logs for this specific user, sorted by newest first
-                    const userLogs = allLogs.filter(log => log.username?.trim().toLowerCase() === user.username?.trim().toLowerCase())
-                        .slice().reverse();
-
-                    // Find the latest record that has a login time
-                    const lastLoginLog = userLogs.find(log => log.login_time || (log.action && (log.action.toLowerCase().includes('login') || log.action.toLowerCase().includes('log in') || log.action.toLowerCase().includes('logged in'))));
-
-                    // Find the latest record that has a logout time
-                    const lastLogoutLog = userLogs.find(log => log.logout_time || (log.action && (log.action.toLowerCase().includes('logout') || log.action.toLowerCase().includes('log out') || log.action.toLowerCase().includes('logged out') || log.action.toLowerCase().includes('session completed'))));
+                    const userLogs = allLogs.filter(log => log.username?.trim().toLowerCase() === user.username?.trim().toLowerCase());
 
                     return {
                         ...user,
-                        login_time: lastLoginLog ? (lastLoginLog.login_time || lastLoginLog.timestamp) : null,
-                        logout_time: lastLogoutLog ? (lastLogoutLog.logout_time || lastLogoutLog.timestamp) : null
+                        login_time: getLatestLoginTime(userLogs),
+                        logout_time: getLatestLogoutTime(userLogs)
                     };
                 });
 
@@ -245,7 +239,8 @@ const Admin = () => {
                 const mentorDomain = currentUser.domain;
                 const adminRole = currentUser.role;
                 const isSpecialDomain = !mentorDomain || mentorDomain === 'xyz' || mentorDomain === 'Admin' || mentorDomain === 'Super Admin' || mentorDomain === 'Management' || (adminRole && adminRole.toLowerCase().includes('super'));
-                const domainLogs = isSpecialDomain ? data : data.filter(log => (log.domain || log.Domain) === mentorDomain);
+                const userLogs = data.filter(log => isEndUserRole(log.role));
+                const domainLogs = isSpecialDomain ? userLogs : userLogs.filter(log => (log.domain || log.Domain) === mentorDomain);
                 setLogsData(domainLogs);
             }
         } catch (err) {
@@ -265,27 +260,19 @@ const Admin = () => {
 
             const users = uRes.ok ? await uRes.json() : [];
             const reports = rRes.ok ? await rRes.json() : [];
-            const logs = lRes.ok ? await lRes.json() : [];
+            const logs = lRes.ok ? (await lRes.json()).filter(log => isEndUserRole(log.role)) : [];
             const performance = mRes.ok ? await mRes.json() : [];
             const mentorsData = mentorsRes?.ok ? await mentorsRes.json() : [];
 
             if (uRes.ok && lRes.ok) {
                 // No domain filtering — show all users across all domains
                 const usersWithActivity = users.map(user => {
-                    // Find all logs for this specific user, sorted by newest first
-                    const userLogs = logs.filter(log => log.username?.trim().toLowerCase() === user.username?.trim().toLowerCase())
-                        .slice().reverse();
-
-                    // Find the latest record that has a login time
-                    const lastLoginLog = userLogs.find(log => log.login_time || (log.action && (log.action.toLowerCase().includes('login') || log.action.toLowerCase().includes('log in') || log.action.toLowerCase().includes('logged in'))));
-
-                    // Find the latest record that has a logout time
-                    const lastLogoutLog = userLogs.find(log => log.logout_time || (log.action && (log.action.toLowerCase().includes('logout') || log.action.toLowerCase().includes('log out') || log.action.toLowerCase().includes('logged out') || log.action.toLowerCase().includes('session completed'))));
+                    const userLogs = logs.filter(log => log.username?.trim().toLowerCase() === user.username?.trim().toLowerCase());
 
                     return {
                         ...user,
-                        login_time: lastLoginLog ? (lastLoginLog.login_time || lastLoginLog.timestamp) : null,
-                        logout_time: lastLogoutLog ? (lastLogoutLog.logout_time || lastLogoutLog.timestamp) : null
+                        login_time: getLatestLoginTime(userLogs),
+                        logout_time: getLatestLogoutTime(userLogs)
                     };
                 });
 

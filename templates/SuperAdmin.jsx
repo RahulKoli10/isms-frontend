@@ -2,65 +2,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { API_BASE_URL } from "./config";
+import { formatIndianDate, formatIndianDateTime, getIndianDateTimeMs } from "./dateTime";
 import logo from "../static/NNlogo.jpeg";
- 
-//           DATE / TIME FORMATTING HELPERS 
-
-function formatIndianDateTime(value) {
-  if (!value || value === 'NULL' || value.trim() === '') return "—";
-
-  try {
-    let normalized = value.trim();
-
-    // Replace space with T if it's date time with space (common DB format)
-    if (normalized.includes(' ') && !normalized.includes('T')) {
-      normalized = normalized.replace(' ', 'T');
-    }
-
-    // If no timezone → assume it's IST and append offset
-    if (!normalized.includes('Z') && !normalized.includes('+') && !normalized.includes('-', 10)) {
-      normalized += '+05:30';
-    }
-
-    const date = new Date(normalized);
-
-    if (isNaN(date.getTime())) {
-      console.warn("Parse failed even after normalize:", value, "→", normalized);
-      return "Invalid date";
-    }
-
-    return date.toLocaleString('en-IN', {
-      timeZone: 'Asia/Kolkata',
-      dateStyle: 'medium',
-      timeStyle: 'short',
-      hour12: false
-    });
-  } catch (err) {
-    console.warn("Date format error:", value, err);
-    return "Invalid date";
-  }
-}
-
-function formatIndianDateOnly(value) {
-  if (!value || value === 'NULL' || value.trim() === '') return "—";
-
-  try {
-    let dateStr = value.trim().split(/\s+/)[0]; // take only YYYY-MM-DD part
-
-    const date = new Date(dateStr);
-
-    if (isNaN(date.getTime())) return "—";
-
-    return date.toLocaleDateString('en-IN', {
-      timeZone: 'Asia/Kolkata',
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
-  } catch {
-    return "—";
-  }
-}
 
 const DEFAULT_CURRENT_USER = { name: "Super Admin", username: "Super Admin", domain: "xyz" };
 const DASHBOARD_REFRESH_MS = 30000;
@@ -93,6 +36,47 @@ function fetchWithSession(url, options = {}) {
       ...(options.headers || {}),
     },
   });
+}
+
+function getUserAccessScope(currentUser) {
+  const storedUser = getStoredCurrentUser();
+  const adminDomain = currentUser?.domain || storedUser?.domain || DEFAULT_CURRENT_USER.domain;
+  const adminRole = currentUser?.role || storedUser?.role || "";
+  const isSpecialDomain =
+    !adminDomain ||
+    adminDomain === "xyz" ||
+    adminDomain === "Admin" ||
+    adminDomain === "Super Admin" ||
+    adminDomain === "Management" ||
+    adminRole.toLowerCase().includes("super");
+
+  return { adminDomain, isSpecialDomain };
+}
+
+function isEndUserRole(role) {
+  return String(role || "").trim().toLowerCase() === "user";
+}
+
+function formatIdleTime(idleTimeInSeconds) {
+  const totalSeconds = Number(idleTimeInSeconds);
+
+  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) {
+    return "—";
+  }
+
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${seconds}s`;
+  }
+
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+
+  return `${seconds}s`;
 }
 
 // Session verification on app mount
@@ -216,7 +200,7 @@ const SuperAdmin = () => {
     try {
       if (!currentUser?.username) return;
 
-      const response = await fetchWithSession(`${API_BASE_URL}/api/logs`);
+      const response = await fetchWithSession(`${API_BASE_URL}/api/activity`);
       if (response.ok) {
         const allLogs = await response.json() || [];
         
@@ -226,22 +210,11 @@ const SuperAdmin = () => {
             log.username?.trim().toLowerCase() === currentUser.username?.trim().toLowerCase() &&
             log.logout_time
           )
-          .sort((a, b) => new Date(b.logout_time) - new Date(a.logout_time));
+          .sort((a, b) => getIndianDateTimeMs(b.logout_time) - getIndianDateTimeMs(a.logout_time));
 
         if (userLogoutLogs.length > 0) {
           const lastLogout = userLogoutLogs[0];
-          // Format the logout time
-          const logoutDate = new Date(lastLogout.logout_time);
-          const formattedLogoutTime = logoutDate.toLocaleString("en-US", {
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-            month: "short",
-            day: "numeric",
-            year: "numeric"
-          });
-          
-          setPreviousLogoutTime(formattedLogoutTime);
+          setPreviousLogoutTime(formatIndianDateTime(lastLogout.logout_time));
           setShowPreviousLogoutModal(true);
           
           // Auto-close modal after 5 seconds
@@ -255,6 +228,30 @@ const SuperAdmin = () => {
     }
   };
 
+  const fetchLogsData = async () => {
+    try {
+      const response = await fetchWithSession(`${API_BASE_URL}/api/logs`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch logs");
+      }
+
+      const logsResponse = await response.json();
+      const logsArray = Array.isArray(logsResponse) ? logsResponse : [];
+      const { adminDomain, isSpecialDomain } = getUserAccessScope(currentUser);
+      const scopedLogs = isSpecialDomain
+        ? logsArray
+        : logsArray.filter((log) => (log.domain || "") === adminDomain);
+      const filteredLogs = scopedLogs.filter((log) => isEndUserRole(log.role));
+
+      setLogsData(filteredLogs);
+      return filteredLogs;
+    } catch (err) {
+      console.warn("Failed to fetch logs:", err);
+      setLogsData([]);
+      return [];
+    }
+  };
+
   const fetchDashboardData = () => {
     Promise.all([
       fetchWithSession(`${API_BASE_URL}/api/admins`).then((res) => {
@@ -265,28 +262,16 @@ const SuperAdmin = () => {
         if (!res.ok) return [];
         return res.json();
       }),
-      fetchWithSession(`${API_BASE_URL}/api/logs`).then((res) => {
-        if (!res.ok) return [];
-        return res.json();
-      }),
     ])
-      .then(([adminsData, usersData, logsDataResponse]) => {
+      .then(([adminsData, usersData]) => {
         // Ensure data is always an array
         const adminsArray = Array.isArray(adminsData) ? adminsData : [];
         const usersArray = Array.isArray(usersData) ? usersData : [];
-        const logsArray = Array.isArray(logsDataResponse) ? logsDataResponse : [];
-        
-        const storedUser = JSON.parse(localStorage.getItem('currentUser'));
-        const adminDomain = currentUser.domain || storedUser?.domain;
-        const adminRole = currentUser.role || storedUser?.role;
-        const isAdminName = currentUser.username || currentUser.name || storedUser?.username;
-        const isSpecialDomain = !adminDomain || adminDomain === 'xyz' || adminDomain === 'Admin' || adminDomain === 'Super Admin' || adminDomain === 'Management' || (adminRole && adminRole.toLowerCase().includes('super'));
+        const { adminDomain, isSpecialDomain } = getUserAccessScope(currentUser);
         const filteredAdmins = isSpecialDomain ? adminsArray : adminsArray.filter(a => (a.domain || a.Domain) === adminDomain);
         const filteredUsers = isSpecialDomain ? usersArray : usersArray.filter(u => (u.domain || u.Domain) === adminDomain);
-        const filteredLogs = isSpecialDomain ? logsArray : logsArray.filter(l => l.domain === adminDomain);
 
         setMonthlyReportData(filteredUsers);
-        setLogsData(filteredLogs);
         const activeEmployees = filteredUsers.filter((e) => e.status === "Online").length;
         const avgActivity = filteredUsers.length > 0
           ? Math.round((activeEmployees / filteredUsers.length) * 100)
@@ -335,10 +320,12 @@ const SuperAdmin = () => {
         }),
       }));
       fetchDashboardData();
+      fetchLogsData();
       fetchPreviousLogoutTime();
       pollingIntervalRef.current = setInterval(() => {
         if (document.visibilityState === "visible") {
           fetchDashboardData();
+          fetchLogsData();
         }
       }, DASHBOARD_REFRESH_MS);
     }
@@ -349,6 +336,8 @@ const SuperAdmin = () => {
     } else if (view === "weekly-reports") {
       fetchReports("weekly");
       setShowReportForm(reportMode === "list" ? null : "weekly");
+    } else if (view === "logs-audit") {
+      fetchLogsData();
     }
 
     return () => { if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current); };
@@ -984,12 +973,13 @@ const SuperAdmin = () => {
                         <th className="px-6 py-4">Role</th>
                         <th className="px-6 py-4">Status</th>
                         <th className="px-6 py-4">Action</th>
+                        <th className="px-6 py-4">Idle Time</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 italic">
                       {logsData.length === 0 ? (
                         <tr>
-                          <td colSpan="11" className="px-6 py-10 text-center text-slate-400 text-sm">
+                          <td colSpan="12" className="px-6 py-10 text-center text-slate-400 text-sm">
                             No recent log activities recorded.
                           </td>
                         </tr>
@@ -1116,12 +1106,13 @@ const SuperAdmin = () => {
                       <th className="px-6 py-4">Role</th>
                       <th className="px-6 py-4">Status</th>
                       <th className="px-6 py-4">Action</th>
+                      <th className="px-6 py-4">Idle Time</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {logsData.length === 0 ? (
                       <tr>
-                        <td colSpan="11" className="p-12 text-center text-slate-400 italic">
+                        <td colSpan="12" className="p-12 text-center text-slate-400 italic">
                           No audit logs found.
                         </td>
                       </tr>
@@ -1944,14 +1935,11 @@ const LogAuditRow = ({
   domain,
   role,
   action,
+  idle_time,
 }) => {
-  // Always show today's date (as you requested)
-  const todayDate = new Date().toLocaleDateString('en-IN', {
-    timeZone: 'Asia/Kolkata',
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
-  });
+  const displayDate = login_time || logout_time || timestamp
+    ? formatIndianDate(login_time || logout_time || timestamp)
+    : "—";
 
   // Login time
   const displayLoginTime = login_time && login_time !== 'NULL' && login_time.trim()
@@ -1990,7 +1978,7 @@ const LogAuditRow = ({
         #{id}
       </td>
 
-      <td className="px-6 py-4 text-sm text-slate-600 font-medium">{todayDate}</td>
+      <td className="px-6 py-4 text-sm text-slate-600 font-medium">{displayDate}</td>
 
       {/* LOGIN TIME */}
       <td className="px-6 py-4">
@@ -2063,6 +2051,12 @@ const LogAuditRow = ({
       <td className="px-6 py-4">
         <span className="text-slate-700 text-xs font-semibold bg-slate-100 px-2 py-1 rounded border border-slate-200 whitespace-nowrap">
           {action || '—'}
+        </span>
+      </td>
+
+      <td className="px-6 py-4">
+        <span className="text-slate-700 text-xs font-semibold bg-amber-50 px-2 py-1 rounded border border-amber-100 whitespace-nowrap">
+          {formatIdleTime(idle_time)}
         </span>
       </td>
     </tr>
